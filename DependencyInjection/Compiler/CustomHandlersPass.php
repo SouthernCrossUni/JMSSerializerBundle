@@ -5,13 +5,16 @@ namespace JMS\SerializerBundle\DependencyInjection\Compiler;
 use JMS\Serializer\GraphNavigator;
 use JMS\Serializer\Handler\HandlerRegistry;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\Compiler\ServiceLocatorTagPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Reference;
 
 class CustomHandlersPass implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container)
     {
         $handlers = array();
+        $handlerServices = array();
         foreach ($container->findTaggedServiceIds('jms_serializer.handler') as $id => $tags) {
             foreach ($tags as $attrs) {
                 if (!isset($attrs['type'], $attrs['format'])) {
@@ -29,7 +32,12 @@ class CustomHandlersPass implements CompilerPassInterface
 
                 foreach ($directions as $direction) {
                     $method = isset($attrs['method']) ? $attrs['method'] : HandlerRegistry::getDefaultMethod($direction, $attrs['type'], $attrs['format']);
-                    $handlers[$direction][$attrs['type']][$attrs['format']] = array($id, $method);
+                    if (class_exists(ServiceLocatorTagPass::class) || $container->getDefinition($id)->isPublic()) {
+                        $handlerServices[$id] = new Reference($id);
+                        $handlers[$direction][$attrs['type']][$attrs['format']] = array($id, $method);
+                    } else {
+                        $handlers[$direction][$attrs['type']][$attrs['format']] = array(new Reference($id), $method);
+                    }
                 }
             }
         }
@@ -53,12 +61,22 @@ class CustomHandlersPass implements CompilerPassInterface
 
                 foreach ($directions as $direction) {
                     $method = isset($methodData['method']) ? $methodData['method'] : HandlerRegistry::getDefaultMethod($direction, $methodData['type'], $methodData['format']);
-                    $handlers[$direction][$methodData['type']][$methodData['format']] = array($id, $method);
+                    if (class_exists(ServiceLocatorTagPass::class) || $container->getDefinition($id)->isPublic()) {
+                        $handlerServices[$id] = new Reference($id);
+                        $handlers[$direction][$methodData['type']][$methodData['format']] = array($id, $method);
+                    } else {
+                        $handlers[$direction][$methodData['type']][$methodData['format']] = array(new Reference($id), $method);
+                    }
                 }
             }
         }
 
-        $container->getDefinition('jms_serializer.handler_registry')
+        $container->findDefinition('jms_serializer.handler_registry')
             ->addArgument($handlers);
+
+        if (class_exists(ServiceLocatorTagPass::class)) {
+            $serviceLocator = ServiceLocatorTagPass::register($container, $handlerServices);
+            $container->findDefinition('jms_serializer.handler_registry')->replaceArgument(0, $serviceLocator);
+        }
     }
 }

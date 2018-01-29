@@ -18,17 +18,16 @@
 
 namespace JMS\SerializerBundle\Tests\DependencyInjection;
 
-use JMS\Serializer\Metadata\PropertyMetadata;
-use JMS\Serializer\Naming\PropertyNamingStrategyInterface;
+use JMS\SerializerBundle\DependencyInjection\Compiler\FormErrorHandlerTranslationDomainPass;
 use JMS\SerializerBundle\DependencyInjection\JMSSerializerExtension;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use PHPUnit\Framework\TestCase;
 
-class NamingStrategyTest extends TestCase
+class FormErrorHandlerTranslationDomainPassTest extends TestCase
 {
     /**
-     *
      * @param array $configs
+     *
      * @return ContainerBuilder
      */
     private function getContainer(array $configs = array())
@@ -41,40 +40,33 @@ class NamingStrategyTest extends TestCase
         $container->setParameter('kernel.bundles', array());
 
         $loader->load(['jms_serializer' => $configs], $container);
+
         return $container;
     }
 
-    public function testCustomNamingStrategy()
+    public function testExistentParameter()
     {
-        $container = $this->getContainer(array(
-            'property_naming' => array(
-                'id' => 'custom_naming_strategy',
-                'enable_cache' => false
-            )
-        ));
-        $customNamingStrategy = new CustomNamingStrategy();
-        $container->set("custom_naming_strategy", $customNamingStrategy);
+        $container = $this->getContainer();
+        $container->setParameter('validator.translation_domain', 'custom_domain');
 
-        $this->assertSame($customNamingStrategy, $container->get('jms_serializer.naming_strategy'));
+        $pass = new FormErrorHandlerTranslationDomainPass();
+        $pass->process($container);
+
+        $args = $container->findDefinition('jms_serializer.form_error_handler')->getArguments();
+
+        $this->assertArrayHasKey(1, $args);
+        $this->assertContains('%validator.translation_domain%', $args[1]);
     }
 
-    public function testCachedNamingStrategy()
+    public function testNonExistentParameter()
     {
-        $container = $this->getContainer(array(
-            'property_naming' => array(
-                'enable_cache' => true
-            )
-        ));
+        $container = $this->getContainer();
 
-        $namingStrategy = $container->get('jms_serializer.naming_strategy');
-        $this->assertInstanceOf('JMS\Serializer\Naming\CacheNamingStrategy', $namingStrategy);
-    }
-}
+        $pass = new FormErrorHandlerTranslationDomainPass();
+        $pass->process($container);
 
-class CustomNamingStrategy implements PropertyNamingStrategyInterface
-{
-    public function translateName(PropertyMetadata $property)
-    {
-        return 'foo';
+        $args = $container->findDefinition('jms_serializer.form_error_handler')->getArguments();
+
+        $this->assertArrayNotHasKey(1, $args);
     }
 }

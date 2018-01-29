@@ -18,18 +18,27 @@
 
 namespace JMS\SerializerBundle\DependencyInjection;
 
+use JMS\Serializer\EventDispatcher\EventSubscriberInterface;
 use JMS\Serializer\Exception\RuntimeException;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\XmlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\HttpKernel\DependencyInjection\ConfigurableExtension;
+use Symfony\Component\Stopwatch\Stopwatch;
 
 class JMSSerializerExtension extends ConfigurableExtension
 {
     public function loadInternal(array $config, ContainerBuilder $container)
     {
+        if (method_exists($container, 'registerForAutoconfiguration')) {
+            $container
+                ->registerForAutoconfiguration(EventSubscriberInterface::class)
+                ->addTag('jms_serializer.event_subscriber');
+        }
+
         $loader = new XmlFileLoader($container, new FileLocator(array(
             __DIR__ . '/../Resources/config/')));
         $loader->load('services.xml');
@@ -108,6 +117,16 @@ class JMSSerializerExtension extends ConfigurableExtension
             ->getDefinition('jms_serializer.metadata_factory')
             ->replaceArgument(2, $config['metadata']['debug']);
 
+        // warmup
+        if (!empty($config['metadata']['warmup']['paths']['included']) && class_exists(Finder::class)) {
+            $container
+                ->getDefinition('jms_serializer.cache.cache_warmer')
+                ->replaceArgument(0, $config['metadata']['warmup']['paths']['included'])
+                ->replaceArgument(2, $config['metadata']['warmup']['paths']['excluded']);
+        } else {
+            $container->removeDefinition('jms_serializer.cache.cache_warmer');
+        }
+
         // directories
         $directories = array();
         if ($config['metadata']['auto_detection']) {
@@ -150,7 +169,7 @@ class JMSSerializerExtension extends ConfigurableExtension
         $container->setParameter('jms_serializer.xml_serialization_visitor.format_output', $config['visitors']['xml']['format_output']);
         $container->setParameter('jms_serializer.json_serialization_visitor.options', $config['visitors']['json']['options']);
 
-        if (!$container->getParameter('kernel.debug')) {
+        if (!$container->getParameter('kernel.debug') || !class_exists(Stopwatch::class)) {
             $container->removeDefinition('jms_serializer.stopwatch_subscriber');
         }
 
@@ -163,7 +182,7 @@ class JMSSerializerExtension extends ConfigurableExtension
             $contextFactory = $container->getDefinition($serviceId);
 
             if (isset($config['default_context'][$configKey]['id'])) {
-                $container->setAlias('jms_serializer.' . $configKey . '_context_factory', $config['default_context'][$configKey]['id']);
+                $container->setAlias('jms_serializer.' . $configKey . '_context_factory', new Alias($config['default_context'][$configKey]['id'], true));
                 $container->removeDefinition($serviceId);
                 continue;
             }
