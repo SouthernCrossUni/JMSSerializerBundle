@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2011 Johannes M. Schmitt <schmittjoh@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 namespace JMS\SerializerBundle;
 
 use JMS\DiExtraBundle\DependencyInjection\Compiler\LazyServiceMapPass;
@@ -35,13 +19,13 @@ class JMSSerializerBundle extends Bundle
     public function build(ContainerBuilder $builder)
     {
         $builder->addCompilerPass($this->getServiceMapPass('jms_serializer.serialization_visitor', 'format',
-            function (ContainerBuilder $container, Definition $def) {
-                $container->getDefinition('jms_serializer.serializer')->replaceArgument(3, $def);
+            function (ContainerBuilder $container, $def) {
+                $container->getDefinition('jms_serializer.serializer')->replaceArgument(2, $def);
             }
         ));
         $builder->addCompilerPass($this->getServiceMapPass('jms_serializer.deserialization_visitor', 'format',
-            function (ContainerBuilder $container, Definition $def) {
-                $container->getDefinition('jms_serializer.serializer')->replaceArgument(4, $def);
+            function (ContainerBuilder $container, $def) {
+                $container->getDefinition('jms_serializer.serializer')->replaceArgument(3, $def);
             }
         ));
 
